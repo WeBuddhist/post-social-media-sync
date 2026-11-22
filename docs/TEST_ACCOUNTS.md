@@ -16,10 +16,12 @@ anywhere. Put `#fail` in a caption to see a permanent failure, `#flaky` to see a
 
 ## The plan
 
-**Identity:** one team member's existing accounts, plus their own phone, used once per platform where asked. For
-email, use their normal inbox. If a platform needs a *second* account on it, use a plus-address
-(`openpecha+x@gmail.com`): it arrives in the same inbox. Don't use virtual or disposable SMS numbers. They are blocked
-or get accounts banned.
+**Identity:** if your organization's existing email shouldn't be used for social media, create **one** dedicated
+Google account for your content brand (one phone verification, once), not one per platform. Use that address to sign
+up on the platforms that take an email (Instagram, TikTok, X, Bluesky, the Google/YouTube side). If a platform needs a
+*second* account on it, use a plus-address of the same inbox (`yourbrand+x@gmail.com`). Facebook and LinkedIn are
+different: they require a real person's personal profile, so a team member uses their own profile and manages the
+brand's Page from it. Don't use virtual or disposable SMS numbers. They are blocked or get accounts banned.
 
 | Platform | Create | Phone? | While your app is unreviewed |
 |---|---|---|---|
@@ -28,7 +30,7 @@ or get accounts banned.
 | Threads | Open Threads with that Instagram account | No | Add the profile as **Threads Tester** and accept in Threads (*Settings > Account > Website permissions > Invites*) |
 | YouTube | Nothing new: in your Google account add a **second channel** (Brand Account, up to 100) | No (only for videos over 15 min) | OAuth consent screen in *Testing*, you listed as test user; logins expire after 7 days; uploads stay **private** until the YouTube API audit |
 | TikTok | One TikTok account you own (email or Google sign-in usually works without a phone) | Usually not | Add it as a **Sandbox target user** and set the account **Private**: unaudited apps can only post "Only me" videos |
-| LinkedIn | Nothing new: your real profile (and the real OpenPecha Page with you as admin) | No | "Share on LinkedIn" + "Sign In with OpenID Connect" are self-serve: you can post to your profile right away. Page posting needs the Community Management API on a **separate** app, approved by LinkedIn |
+| LinkedIn | Nothing new: your real profile (and your organization's Page, with you as admin) | No | "Share on LinkedIn" + "Sign In with OpenID Connect" are self-serve: you can post to your profile right away. Page posting needs the Community Management API on a **separate** app, approved by LinkedIn |
 | X | Your own account, or a second test handle (one phone may verify up to 10 X accounts) | Yes for the developer account | No test mode, posts are real. 2026 pricing is pay-per-use: load a few dollars of credit first (a post is about $0.015; with a link, about $0.20) |
 | Bluesky | One test account | **Yes** on bsky.social right now (check: `curl -s https://bsky.social/xrpc/com.atproto.server.describeServer`) | No developer app needed: create an **App password** in Settings. Posts are public: mark the account as a test account and delete test posts |
 
@@ -43,8 +45,8 @@ or get accounts banned.
    Then follow the Meta sections of [PLATFORM_SETUP.md](PLATFORM_SETUP.md).
 4. **YouTube**: Google Cloud project, YouTube Data API, consent screen in *Testing* with you as test user, then
    create the second channel and pick it when you connect.
-5. **LinkedIn**: developer app linked to the OpenPecha Page, add the two self-serve products, connect your profile.
-   Apply for the Community Management API (on a second, new app, with an @openpecha email and a screen recording) only when you need Page posting.
+5. **LinkedIn**: developer app linked to your organization's Page, add the two self-serve products, connect your profile.
+   Apply for the Community Management API (on a second, new app, with an email on your organization's domain and a screen recording) only when you need Page posting.
 6. **TikTok**: create the developer organization and app (Terms and Privacy Policy pages on your own site), turn on Direct Post,
    create a Sandbox, add your private test account as target user.
 7. **X**: developer console, app with OAuth 2.0 *Read and write*, add a little credit.
