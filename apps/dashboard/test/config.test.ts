@@ -29,6 +29,7 @@ const VARS = [
   "CORS_ORIGINS",
   "REMOTE_MEDIA_HOSTS",
   "BLUESKY_SERVERS",
+  "DEMO_MODE",
   "META_APP_ID",
   "META_APP_SECRET",
   "META_GRAPH_VERSION",
@@ -85,6 +86,7 @@ describe("loadConfig", () => {
       maxUploadMb: 4096,
       workerConcurrency: 3,
       maxAttempts: 3,
+      demo: false,
       webhook: null,
       allowedReturnOrigins: [],
       corsOrigins: [],
@@ -106,6 +108,7 @@ describe("loadConfig", () => {
       MAX_UPLOAD_MB: "100",
       WORKER_CONCURRENCY: "0",
       MAX_ATTEMPTS: "5",
+      DEMO_MODE: "on",
       WEBHOOK_URL: "https://hooks.example.com/in",
       WEBHOOK_SECRET: "whsec",
       WEBHOOK_EVENTS: "target.failed, account.needsReconnect",
@@ -143,6 +146,7 @@ describe("loadConfig", () => {
       maxUploadMb: 100,
       workerConcurrency: 1,
       maxAttempts: 5,
+      demo: true,
       webhook: { url: "https://hooks.example.com/in", secret: "whsec", events: ["target.failed", "account.needsReconnect"] },
       allowedReturnOrigins: ["https://app.example.com", "http://localhost:5173"],
       corsOrigins: ["https://app.example.com"],
@@ -159,7 +163,7 @@ describe("loadConfig", () => {
   });
 
   it("names the env vars of every connector", () => {
-    expect(Object.keys(CONNECTOR_ENV).sort()).toEqual(["bluesky", "google", "linkedin", "meta", "threads", "tiktok", "x"]);
+    expect(Object.keys(CONNECTOR_ENV).sort()).toEqual(["bluesky", "demo", "google", "linkedin", "meta", "threads", "tiktok", "x"]);
     for (const vars of Object.values(CONNECTOR_ENV)) for (const v of vars) expect(VARS).toContain(v);
   });
 

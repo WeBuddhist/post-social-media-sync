@@ -1,5 +1,6 @@
+import { isPrivateBaseUrl, type Config } from "../config.js";
 import { ApiError, AuthError, RefreshAuthError } from "../http.js";
-import type { PublishContext } from "./types.js";
+import type { Platform, PublishContext, PublishInput } from "./types.js";
 
 export interface PollOptions {
   intervalMs: number;
@@ -51,4 +52,17 @@ export async function withFreshToken<T>(ctx: PublishContext, pick: (credentials:
     if (!(err instanceof AuthError) || err instanceof RefreshAuthError) throw err;
     return fn(pick(await ctx.credentials({ force: true })));
   }
+}
+
+/**
+ * Why the platform couldn't download this post's media from our public URL (it isn't reachable from the internet),
+ * or null.
+ */
+export function publicMediaProblem(platform: Platform, input: PublishInput, config: Config): string | null {
+  const caps = platform.capabilities;
+  const images = input.media.filter((m) => m.kind === "image");
+  const downloaded = caps.needsPublicMediaUrl === "all" ? input.media : caps.needsPublicMediaUrl === "images" ? images : [];
+  if (!downloaded.length || !isPrivateBaseUrl(config.publicBaseUrl)) return null;
+  const what = caps.needsPublicMediaUrl === "images" ? "photos" : "photos and videos";
+  return `${platform.name} downloads ${what} from this server, but its public URL (${config.publicBaseUrl}) isn't reachable from the internet. Deploy the server or use a tunnel such as cloudflared or ngrok.`;
 }

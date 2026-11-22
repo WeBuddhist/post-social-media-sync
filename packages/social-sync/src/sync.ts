@@ -10,7 +10,8 @@ import { consoleLogger, errorText, silentLogger, type Logger } from "./logger.js
 import { hasFfmpeg, MediaStore, SUPPORTED_MIME_TYPES } from "./media.js";
 import { CONNECTORS, getConnector, getPlatform, PLATFORMS } from "./platforms/index.js";
 import { parsePostRequest, PostService } from "./posts.js";
-import type { Connector } from "./platforms/types.js";
+import { checkDemo, DEMO_CONNECTOR_ID, demoConnector, isDemoAccount } from "./platforms/demo.js";
+import type { CheckContext, Connector } from "./platforms/types.js";
 import type { Storage } from "./storage/types.js";
 import type {
   CheckResult,
@@ -60,6 +61,13 @@ export interface PostSyncOptions {
   };
   /** Your logger (default: console). Pass false to silence. */
   logger?: Logger | false;
+  /**
+   * Demo mode (default false): offers the "demo" connector, which adds one simulated account per enabled platform.
+   * Posting to a demo account calls no platform: it shows a few progress steps and returns a fake link. A caption
+   * with "#fail" fails for good, one with "#flaky" fails with a temporary error on the first attempt. Demo accounts
+   * can't publish (or be checked) while demo mode is off.
+   */
+  demo?: boolean;
   /** Overrides waiting inside publishers (tests). */
   sleep?: (ms: number) => Promise<void>;
 }
@@ -128,6 +136,7 @@ export class PostSync {
       maxUploadBytes: (options.maxUploadMb ?? 4096) * 1024 * 1024,
       workerConcurrency: Math.max(1, options.worker?.concurrency ?? 3),
       maxAttempts: Math.max(1, options.worker?.maxAttempts ?? 3),
+      demo: options.demo === true,
       ...resolvePlatformKeys(options.platforms),
     };
     this.enabled = new Set(options.enabledPlatforms ?? (Object.keys(PLATFORMS) as PlatformId[]));
@@ -167,12 +176,13 @@ export class PostSync {
       publicUrl: config.publicBaseUrl,
       publicMediaReachable: !isPrivateBaseUrl(config.publicBaseUrl),
       ffmpeg: await hasFfmpeg(),
+      demo: config.demo,
       maxUploadMb: Math.round(config.maxUploadBytes / 1024 / 1024),
       supportedMimeTypes: SUPPORTED_MIME_TYPES,
       platforms: Object.values(PLATFORMS)
         .filter((p) => this.enabled.has(p.id))
         .map((p) => ({ id: p.id, name: p.name, connector: p.connector, capabilities: p.capabilities, options: p.options })),
-      connectors: Object.values(CONNECTORS)
+      connectors: [...Object.values(CONNECTORS), ...(config.demo ? [demoConnector] : [])]
         .filter((c) => c.platforms.some((p) => this.enabled.has(p)))
         .map((c) => ({
           id: c.id,
@@ -215,11 +225,12 @@ export class PostSync {
       const platform = row && getPlatform(row.platform);
       if (!row || !platform) return null;
       try {
-        const detail = await platform.checkConnection({
+        const ctx: CheckContext = {
           account: this.accountService.info(row),
           config: this.config,
           credentials: (opts) => this.accountService.credentials(row.id, opts),
-        });
+        };
+        const detail = await (isDemoAccount(row) ? checkDemo(platform, ctx) : platform.checkConnection(ctx));
         await this.accountService.markActive(row);
         return { ok: true, detail };
       } catch (err) {
@@ -365,9 +376,12 @@ export class PostSync {
       }
     },
 
-    /** Connects a platform that uses a form instead of OAuth (Bluesky: handle + app password). */
+    /**
+     * Connects a platform that uses a form instead of OAuth (Bluesky: handle + app password). In demo mode,
+     * `"demo"` with an optional `{ name }` adds one simulated account per enabled platform.
+     */
     withCredentials: async (ownerId: string, connectorId: string, fields: Record<string, string>): Promise<PublicAccount[]> => {
-      const connector = getConnector(connectorId);
+      const connector = connectorId === DEMO_CONNECTOR_ID && this.config.demo ? demoConnector : getConnector(connectorId);
       if (!connector?.connectWithCredentials || !connector.platforms.some((p) => this.enabled.has(p))) {
         throw new UserError(`Unknown connector "${connectorId}".`);
       }

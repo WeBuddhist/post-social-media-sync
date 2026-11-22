@@ -262,10 +262,12 @@ input:focus, textarea:focus, select:focus { outline: 2px solid color-mix(in srgb
 .tag-bad { background: var(--bad-soft); color: var(--bad); }
 .tag-ok { background: var(--ok-soft); color: var(--ok); }
 .tag-muted { background: var(--surface-2); color: var(--muted); }
+.tag-demo { background: var(--warn-soft); color: var(--warn); letter-spacing: 0.04em; vertical-align: middle; }
 .connect-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
 .connector { border: 1px solid var(--border); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
-.connector .row { display: flex; align-items: center; gap: 8px; }
-.connector .badges { display: flex; gap: 4px; }
+.connector .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.connector .badges { display: flex; gap: 4px; flex-wrap: wrap; }
+.connector-demo { border-style: dashed; border-color: var(--warn); }
 .connector form .field { margin-bottom: 8px; }
 .setup-item .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .setup-item h2 { margin: 0; flex: 1; }

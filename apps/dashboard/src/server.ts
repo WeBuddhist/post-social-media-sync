@@ -59,6 +59,7 @@ export async function buildServer(opts: BuildOptions): Promise<FastifyInstance> 
     mediaDir: path.join(config.dataDir, "media"),
     maxUploadMb: config.maxUploadMb,
     platforms: config.platforms,
+    demo: config.demo,
     worker: { autoStart: false, concurrency: config.workerConcurrency, maxAttempts: config.maxAttempts },
     logger,
     sleep: opts.sleep,

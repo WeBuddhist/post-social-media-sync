@@ -1,9 +1,9 @@
 import type { Config } from "../config.js";
 import type { MediaFile, MediaStore } from "../media.js";
 
-import type { Capabilities, ConnectorId, CredentialField, OptionField, PlatformId } from "../types.js";
+import type { Capabilities, ConnectorId, CredentialField, OptionField, PlatformConnectorId, PlatformId } from "../types.js";
 
-export type { Capabilities, ConnectorId, CredentialField, OptionField, PlatformId };
+export type { Capabilities, ConnectorId, CredentialField, OptionField, PlatformConnectorId, PlatformId };
 
 /** Everything a platform needs to publish one post to one account. */
 export interface PublishInput {
@@ -53,7 +53,7 @@ export interface CheckContext<C = any> {
 export interface Platform {
   id: PlatformId;
   name: string;
-  connector: ConnectorId;
+  connector: PlatformConnectorId;
   capabilities: Capabilities;
   options: OptionField[];
   /** Platform-specific validation beyond the generic capability checks. Returns error messages. */

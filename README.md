@@ -106,7 +106,8 @@ npm start                     # or: npm run dev   (auto-reload while developing)
 ```
 
 Open <http://localhost:3000>, log in with your `ADMIN_PASSWORD`, then go to **Accounts**. **Bluesky** works
-immediately with an app password, which is a good way to try a first post. The other platforms need a free
+immediately with an app password, which is a good way to try a first post. To try everything before you have any
+accounts or app keys, start with `DEMO_MODE=on` (see [Demo mode](#demo-mode)). The other platforms need a free
 developer app each: follow **[docs/PLATFORM_SETUP.md](docs/PLATFORM_SETUP.md)**. The **Setup** tab in the dashboard
 shows the redirect URI to paste into each developer console: `<PUBLIC_BASE_URL>/api/oauth/<connector>/callback`.
 
@@ -114,6 +115,16 @@ The server reads `.env` from the directory you start it in (the repository root 
 `npm run dev`). Every setting is described in [.env.example](.env.example).
 
 ![History screen](docs/screenshot-history.png)
+
+### Demo mode
+
+You don't need real social accounts (or a phone number per platform) to try Post Sync. Set `DEMO_MODE=on` in `.env`
+and **Accounts** shows a **Demo accounts** card: it adds one simulated account per platform, marked **DEMO**.
+Posting to them goes through the whole flow (validation, progress, history, retries, events, webhooks) without
+publishing anything, and ends with a fake link. Put `#fail` in a caption to see a failed post, or `#flaky` to see one
+fail once and be retried a minute later. It's also a convenient backend while you build your own frontend. Turn it
+off (the default) for real use; demo accounts then stop working and can be disconnected. In the package, the same is
+the [`demo` option](docs/PLUGIN.md#demo-mode).
 
 ### With Docker
 
@@ -369,6 +380,7 @@ an in-process Postgres).
 - [docs/PLUGIN.md](docs/PLUGIN.md): embedding the package (frameworks, HTTP API, client SDK, storage, events,
   security, non-Node backends)
 - [docs/PLATFORM_SETUP.md](docs/PLATFORM_SETUP.md): creating the developer app for each platform
+- [docs/TEST_ACCOUNTS.md](docs/TEST_ACCOUNTS.md): which test accounts to create (no new Gmail or phone per platform), demo mode, and what each platform allows before review
 - [docs/openapi.yaml](docs/openapi.yaml): the HTTP API as an OpenAPI document
 - [examples/express-host](examples/express-host): a working Express integration
 - [apps/dashboard/README.md](apps/dashboard/README.md): running the server, headless mode, scaling

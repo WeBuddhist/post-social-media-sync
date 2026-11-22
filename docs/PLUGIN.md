@@ -269,6 +269,27 @@ To run the engine in more than one process or machine:
   - `account.needsReconnect` also fires where the request was handled for `POST /accounts/:id/check`
     (`sync.accounts.check()`) when the login no longer works.
 
+### Demo mode
+
+With `demo: true`, people can try the whole flow (connect, compose, publish, history, retry, events, webhooks)
+before they have real social accounts or app keys, and you can build your frontend against it.
+
+- `describe()` returns `demo: true` and lists an extra connector `"demo"` ("Demo accounts", kind `"credentials"`,
+  one optional text field `name`).
+- `sync.connect.withCredentials(ownerId, "demo", { name: "Acme" })` (or `POST <publicUrl>/connect/demo/credentials`)
+  adds one simulated account per enabled platform, named "Acme (Instagram)" and so on ("Demo (…)" without a
+  name). Their `connector` is `"demo"`: label them as demo accounts in your UI. Each call adds a new set.
+- Posting to a demo account calls no platform. The post is validated by that platform's rules as usual (except that
+  `publicUrl` needn't be public: nothing is downloaded), the job reports a few progress steps and succeeds with a
+  fake `remoteId` and `remoteUrl` (`https://demo.post-sync.invalid/<platform>/<id>`, which never resolves). All the
+  usual events fire.
+- Put **`#fail`** in the caption to simulate a permanent failure, or **`#flaky`** for a temporary one on the first
+  attempt: the queue retries it a minute later and it succeeds. Both are case-insensitive whole hashtags.
+- `sync.accounts.check()` works for demo accounts.
+- With demo mode off, demo accounts stay listed but are refused: `posts.validate()`/`create()` report "This is a demo
+  account, and demo mode is off…", a queued job fails with that message, and `check()` returns `ok: false`.
+  Disconnect them as usual.
+
 ### Reacting to events
 
 `sync.on(event, listener)` subscribes and returns an unsubscribe function; `sync.events.onAny((event, payload) => …)`
@@ -616,6 +637,7 @@ without, they get a 404. It also works with `node:https` and with the compatibil
 | `worker.maxAttempts` | `3` | Attempts for temporary errors. |
 | `worker.pollIntervalMs` | `2000` | How often a started worker looks for due jobs. |
 | `logger` | console | An object with `info`, `warn`, `error` (see [Logging](#logging)), or `false` for silence. |
+| `demo` | `false` | [Demo mode](#demo-mode): offer simulated demo accounts that publish nothing. |
 
 `createPostSync` creates the tables if needed, upgrades tables made by an earlier version (`storage.migrate()`), and
 starts the worker unless told otherwise.

@@ -29,6 +29,8 @@ export interface DashboardConfig {
   maxUploadMb: number;
   workerConcurrency: number;
   maxAttempts: number;
+  /** DEMO_MODE: offer simulated demo accounts that publish nothing (for trying the server without app keys). */
+  demo: boolean;
   platforms: PlatformKeys;
   webhook: { url: string; secret: string | null; events: PostSyncEventName[] | null } | null;
   /** Origins (besides siteUrl) that `returnTo` may send browsers back to after connecting an account. */
@@ -48,6 +50,7 @@ export const CONNECTOR_ENV: Record<ConnectorId, string[]> = {
   google: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
   x: ["X_CLIENT_ID", "X_CLIENT_SECRET"],
   bluesky: [],
+  demo: ["DEMO_MODE"],
 };
 
 function env(name: string, fallback = ""): string {
@@ -203,6 +206,7 @@ export function loadConfig(): DashboardConfig {
     maxUploadMb: envInt("MAX_UPLOAD_MB", 4096),
     workerConcurrency: Math.max(1, envInt("WORKER_CONCURRENCY", 3)),
     maxAttempts: Math.max(1, envInt("MAX_ATTEMPTS", 3)),
+    demo: envBool("DEMO_MODE", false),
     webhook: webhookUrl ? { url: webhookUrl, secret: env("WEBHOOK_SECRET") || null, events: webhookEvents.length ? webhookEvents : null } : null,
     allowedReturnOrigins: origins("ALLOWED_RETURN_ORIGINS"),
     corsOrigins: origins("CORS_ORIGINS"),

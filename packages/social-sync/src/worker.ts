@@ -4,6 +4,7 @@ import type { PostSyncEmitter } from "./events.js";
 import { ApiError, AuthError, RefreshAuthError, sleep as realSleep, UserError } from "./http.js";
 import { errorText, type Logger } from "./logger.js";
 import type { MediaStore } from "./media.js";
+import { isDemoAccount, publishDemo } from "./platforms/demo.js";
 import { getPlatform } from "./platforms/index.js";
 import type { PublishContext, PublishResult } from "./platforms/types.js";
 import type { PostService } from "./posts.js";
@@ -253,6 +254,10 @@ export class Worker {
       sleep: this.deps.sleep ?? realSleep,
     };
 
+    if (isDemoAccount(account)) {
+      log.info(`simulating a post to demo account ${target.platform}/${target.account_name} (attempt ${target.attempts})`);
+      return publishDemo(platform, ctx, target.attempts);
+    }
     log.info(`publishing to ${target.platform}/${target.account_name} (attempt ${target.attempts})`);
     return platform.publish(ctx);
   }

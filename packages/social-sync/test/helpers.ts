@@ -24,6 +24,7 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     maxUploadBytes: 50 * 1024 * 1024,
     workerConcurrency: 2,
     maxAttempts: 3,
+    demo: false,
     meta: { appId: "meta-app", appSecret: "meta-secret", graphVersion: "v26.0", loginConfigId: null, extraScopes: [] },
     threads: { appId: "th-app", appSecret: "th-secret" },
     tiktok: { clientKey: "tt-key", clientSecret: "tt-secret", scopes: "user.info.basic,video.publish,video.upload" },

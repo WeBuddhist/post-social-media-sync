@@ -38,6 +38,7 @@ export function dashboardConfig(overrides: Partial<DashboardConfig> = {}): Dashb
     maxUploadMb: 50,
     workerConcurrency: 2,
     maxAttempts: 3,
+    demo: false,
     platforms: {},
     webhook: null,
     allowedReturnOrigins: [],

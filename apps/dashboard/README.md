@@ -36,6 +36,10 @@ Settings worth knowing about besides the platform keys:
 - `BLUESKY_SERVERS`: the Bluesky servers users may sign in to (comma-separated URLs; default `https://bsky.social`).
   Add the address of every self-hosted server (PDS) your users connect through.
 - `WEBHOOK_EVENTS`: checked at startup; an unknown event name stops the server.
+- `DEMO_MODE=on`: Accounts offers **Demo accounts**, one simulated account per platform (tagged **DEMO**), so you
+  can try composing, publishing, history, retries and webhooks without real accounts or app keys. Nothing is posted;
+  captions with `#fail` or `#flaky` simulate a failure or a retried temporary error. Off by default; with it off, demo
+  accounts are refused when posting. See [Demo mode](../../docs/PLUGIN.md#demo-mode).
 
 **Logging out ends every dashboard session**: all browsers and devices, and other servers sharing the same
 `DATA_DIR` within about 5 seconds. The cut-off time is kept in `DATA_DIR/.sessions-not-before`, so it survives

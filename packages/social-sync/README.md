@@ -13,6 +13,8 @@ Node.js backend, through each platform's official API.
 - **HTTP API for your frontend**, as a web `Request → Response` handler with Express and Fastify adapters, plus a
   typed client SDK. Or call the engine directly from your own routes and jobs.
 - **Storage**: SQLite or PostgreSQL (your existing `pg` pool), or your own.
+- **Demo mode** (`demo: true`): simulated accounts for every platform, so you can build and try your frontend before
+  you have real accounts or app keys ([details](https://github.com/Webuddhist-tech/post-social-media-sync/blob/main/docs/PLUGIN.md#demo-mode)).
 
 Node.js 22.12+. ffmpeg on the server is recommended (video checks, thumbnails, image conversion).
 

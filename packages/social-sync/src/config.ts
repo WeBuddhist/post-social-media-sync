@@ -21,6 +21,8 @@ export interface Config {
   maxUploadBytes: number;
   workerConcurrency: number;
   maxAttempts: number;
+  /** Demo mode: simulated demo accounts can be connected and publish without calling any platform. */
+  demo: boolean;
   meta: { appId: string; appSecret: string; graphVersion: string; loginConfigId: string | null; extraScopes: string[] };
   threads: { appId: string; appSecret: string };
   tiktok: { clientKey: string; clientSecret: string; scopes: string };

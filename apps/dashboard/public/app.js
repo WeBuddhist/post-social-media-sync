@@ -24,6 +24,12 @@ function h(tag, attrs = {}, ...children) {
 const BADGE = { instagram: "IG", facebook: "f", tiktok: "TT", youtube: "▶", linkedin: "in", threads: "@", x: "X", bluesky: "B" };
 const badge = (platform) => h("span", { class: `pbadge p-${platform}`, title: platformName(platform) }, BADGE[platform] ?? "?");
 
+/** Demo accounts (DEMO_MODE=on) are simulated: posting to them publishes nothing. */
+const isDemo = (account) => account?.connector === "demo";
+const DEMO_URL = "https://demo.post-sync.invalid/";
+const isDemoTarget = (t) => isDemo(state.accounts.find((a) => a.id === t.accountId)) || !!t.remoteUrl?.startsWith(DEMO_URL);
+const demoTag = () => h("span", { class: "tag tag-demo", title: "Simulated demo account: nothing is posted" }, "DEMO");
+
 const SETUP_NOTES = {
   meta: [
     "Create an app at developers.facebook.com (use case: manage everything on your Page, plus Instagram).",
@@ -52,6 +58,11 @@ const SETUP_NOTES = {
     "Posting through the X API requires a paid API plan.",
   ],
   bluesky: ["No developer app needed. Create an app password in Bluesky → Settings → Privacy and security."],
+  demo: [
+    "Simulated accounts for trying Post Sync before you have real accounts or app keys. Nothing is ever posted.",
+    "Put #fail in a caption to see a failed post, or #flaky to see one fail once and be retried a minute later.",
+    "Set DEMO_MODE=off once you use real accounts (demo accounts then stop working; disconnect them).",
+  ],
 };
 
 const state = {
@@ -315,7 +326,7 @@ function renderPicker() {
       h(
         "span",
         { class: "who" },
-        h("strong", {}, a.name),
+        h("strong", {}, a.name, isDemo(a) ? [" ", demoTag()] : null),
         h("small", {}, platformName(a.platform), a.username ? ` · @${a.username.replace(/^@/, "")}` : "", disabled ? " · needs reconnect" : ""),
       ),
     );
@@ -817,8 +828,10 @@ function targetRow(t) {
   else if (t.status === "failed") msg = h("div", { class: "msg err" }, t.error ?? "Failed");
   else if (t.status === "succeeded" && t.progress) msg = h("div", { class: "msg" }, t.progress);
 
+  const demo = isDemoTarget(t);
   const actions = h("div", { class: "actions" });
-  if (t.status === "succeeded" && t.remoteUrl) {
+  // A demo post's link is fake (it never resolves): don't offer it.
+  if (t.status === "succeeded" && t.remoteUrl && !demo) {
     actions.append(h("a", { class: "btn btn-sm", href: t.remoteUrl, target: "_blank", rel: "noopener" }, "View ↗"));
   }
   if (t.status === "failed" || t.status === "cancelled") {
@@ -837,7 +850,7 @@ function targetRow(t) {
     "div",
     { class: "target" },
     badge(t.platform),
-    h("div", { class: "detail" }, h("strong", {}, t.accountName), msg),
+    h("div", { class: "detail" }, h("strong", {}, t.accountName), demo ? [" ", demoTag()] : null, msg),
     actions,
   );
 }
@@ -868,7 +881,7 @@ async function renderAccounts() {
         h(
           "div",
           { class: "who" },
-          h("strong", {}, a.name),
+          h("strong", {}, a.name, isDemo(a) ? [" ", demoTag()] : null),
           h("small", { class: "muted" }, platformName(a.platform), a.username ? ` · @${a.username.replace(/^@/, "")}` : ""),
           a.status !== "active" ? h("div", { class: "help", style: "color:var(--bad)" }, a.statusMessage ?? "Needs to be reconnected") : null,
         ),
@@ -926,11 +939,15 @@ async function renderAccounts() {
 
   const connect = $("#connect-list");
   connect.replaceChildren();
-  for (const c of state.meta.connectors) {
+  // The demo card first: it's what to try before setting up any platform.
+  const connectors = [...state.meta.connectors].sort((a, b) => Number(isDemo({ connector: b.id })) - Number(isDemo({ connector: a.id })));
+  for (const c of connectors) {
+    const demo = isDemo({ connector: c.id });
     const card = h(
       "div",
-      { class: "connector" },
-      h("div", { class: "row" }, h("span", { class: "badges" }, c.platforms.map(badge)), h("strong", {}, c.name)),
+      { class: `connector${demo ? " connector-demo" : ""}` },
+      h("div", { class: "row" }, h("span", { class: "badges" }, c.platforms.map(badge)), h("strong", {}, c.name), demo ? demoTag() : null),
+      demo ? h("span", { class: "help" }, "Try the whole flow without real accounts or app keys.") : null,
     );
     if (c.kind === "credentials") {
       const form = h(
@@ -945,7 +962,7 @@ async function renderAccounts() {
             f.help ? h("span", { class: "help" }, f.help) : null,
           ),
         ),
-        h("button", { class: "btn btn-primary btn-block", type: "submit" }, `Connect ${c.name}`),
+        h("button", { class: "btn btn-primary btn-block", type: "submit" }, demo ? "Add demo accounts" : `Connect ${c.name}`),
       );
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -954,7 +971,10 @@ async function renderAccounts() {
         try {
           const fields = Object.fromEntries(new FormData(form));
           const res = await api(`/connect/${c.id}/credentials`, { method: "POST", body: { fields } });
-          toast(`Connected ${res.accounts.map((a) => a.name).join(", ")}.`, "ok");
+          toast(
+            demo ? `Added ${res.accounts.length} demo account${res.accounts.length === 1 ? "" : "s"}.` : `Connected ${res.accounts.map((a) => a.name).join(", ")}.`,
+            "ok",
+          );
           form.reset();
           renderAccounts();
         } catch (err) {

@@ -3,7 +3,10 @@
  */
 
 export type PlatformId = "facebook" | "instagram" | "threads" | "tiktok" | "linkedin" | "youtube" | "x" | "bluesky";
-export type ConnectorId = "meta" | "threads" | "tiktok" | "linkedin" | "google" | "x" | "bluesky";
+/** Connectors that log in to a real platform. */
+export type PlatformConnectorId = "meta" | "threads" | "tiktok" | "linkedin" | "google" | "x" | "bluesky";
+/** "demo": simulated accounts that never touch a platform (only offered with the `demo` option). */
+export type ConnectorId = PlatformConnectorId | "demo";
 export type TargetStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
 export interface Capabilities {
@@ -48,7 +51,7 @@ export interface CredentialField {
 export interface PlatformDescription {
   id: PlatformId;
   name: string;
-  connector: ConnectorId;
+  connector: PlatformConnectorId;
   capabilities: Capabilities;
   options: OptionField[];
 }
@@ -73,6 +76,8 @@ export interface Description {
   /** False when publicUrl is a private address: Instagram photos and Threads media can't be fetched then. */
   publicMediaReachable: boolean;
   ffmpeg: boolean;
+  /** Demo mode is on: the "demo" connector is offered and demo accounts publish (simulated). */
+  demo: boolean;
   maxUploadMb: number;
   supportedMimeTypes: string[];
   platforms: PlatformDescription[];
@@ -83,6 +88,7 @@ export interface PublicAccount {
   id: string;
   ownerId: string;
   platform: PlatformId;
+  /** "demo" for a simulated demo account: label it as such in your UI. */
   connector: ConnectorId;
   name: string;
   username: string | null;

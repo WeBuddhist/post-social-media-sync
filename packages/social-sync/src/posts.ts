@@ -1,7 +1,9 @@
-import { isPrivateBaseUrl, type Config } from "./config.js";
+import type { Config } from "./config.js";
 import type { PostSyncEmitter } from "./events.js";
 import { UserError } from "./http.js";
 import type { MediaFile, MediaStore } from "./media.js";
+import { publicMediaProblem } from "./platforms/common.js";
+import { DEMO_OFF_MESSAGE, isDemoAccount } from "./platforms/demo.js";
 import { getPlatform } from "./platforms/index.js";
 import type { Platform, PublishInput } from "./platforms/types.js";
 import { newId } from "./storage/schema.js";
@@ -39,8 +41,11 @@ export function withDefaults(platform: Platform, options: Record<string, unknown
   return out;
 }
 
-/** Generic checks every platform shares, driven by its declared capabilities. */
-export function validateForPlatform(platform: Platform, input: PublishInput, config: Config): string[] {
+/**
+ * Generic checks every platform shares, driven by its declared capabilities. `simulated`: for a demo account, which
+ * downloads nothing, so the public URL needn't be reachable.
+ */
+export function validateForPlatform(platform: Platform, input: PublishInput, config: Config, opts: { simulated?: boolean } = {}): string[] {
   const caps = platform.capabilities;
   const errors: string[] = [];
   const images = input.media.filter((m) => m.kind === "image");
@@ -64,13 +69,8 @@ export function validateForPlatform(platform: Platform, input: PublishInput, con
   if (caps.mixedMedia && caps.maxMediaItems && input.media.length > caps.maxMediaItems) {
     errors.push(`${platform.name} allows at most ${caps.maxMediaItems} items in one post.`);
   }
-  const downloaded = caps.needsPublicMediaUrl === "all" ? input.media : caps.needsPublicMediaUrl === "images" ? images : [];
-  if (downloaded.length && isPrivateBaseUrl(config.publicBaseUrl)) {
-    const what = caps.needsPublicMediaUrl === "images" ? "photos" : "photos and videos";
-    errors.push(
-      `${platform.name} downloads ${what} from this server, but its public URL (${config.publicBaseUrl}) isn't reachable from the internet. Deploy the server or use a tunnel such as cloudflared or ngrok.`,
-    );
-  }
+  const unreachable = opts.simulated ? null : publicMediaProblem(platform, input, config);
+  if (unreachable) errors.push(unreachable);
   if (platform.validate) errors.push(...platform.validate(input, config));
   return [...new Set(errors)];
 }
@@ -179,8 +179,9 @@ export class PostService {
       platform: account.platform,
       length: measureText(platform.id, input.text),
       errors: [
+        ...(isDemoAccount(account) && !this.config.demo ? [DEMO_OFF_MESSAGE] : []),
         ...(account.status === "needs_reauth" ? [`Reconnect this account first: ${account.status_message ?? "login expired"}`] : []),
-        ...validateForPlatform(platform, input, this.config),
+        ...validateForPlatform(platform, input, this.config, { simulated: isDemoAccount(account) }),
       ],
     }));
   }

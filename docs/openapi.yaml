@@ -314,6 +314,7 @@ paths:
       description: >-
         Checks that the saved login still works, without posting anything. A login the platform rejects marks the
         account `needs_reauth` (and `ok: false, needsReconnect: true` is returned); a working one marks it `active`.
+        A demo account checks out `ok` in demo mode (no platform is called), and `ok: false` while demo mode is off.
       responses:
         "200":
           description: The result of the check (also when the login doesn't work).
@@ -483,10 +484,14 @@ paths:
     post:
       tags: [Connect]
       operationId: connectWithCredentials
-      summary: Connect with a form (Bluesky)
+      summary: Connect with a form (Bluesky, demo accounts)
       description: >-
         For connectors of kind `credentials`: send the values of the connector's `credentialFields` (from
-        `GET /platforms`). Bluesky takes `identifier` (handle or email), `appPassword` (an app password, not the main
+        `GET /platforms`). In demo mode, `demo` takes an optional `name` and adds one simulated account per enabled
+        platform (named "<name or Demo> (<platform>)"). Posting to one calls no platform: the target goes through its
+        usual progress, events and webhooks and gets a fake `remoteUrl` under `https://demo.post-sync.invalid/`. A
+        caption with `#fail` fails for good; one with `#flaky` fails with a temporary error on the first attempt and is
+        retried. While demo mode is off, demo accounts are refused when posting and checking. Bluesky takes `identifier` (handle or email), `appPassword` (an app password, not the main
         password) and optionally `service`: the address of the Bluesky server to sign in to. It must be a bare server
         address (like `https://bsky.social`) that the server allows (package option `platforms.bluesky.servers`,
         `BLUESKY_SERVERS` in the ready-made server; default: only https://bsky.social). Empty means the first allowed
@@ -1400,8 +1405,9 @@ components:
       type: string
       description: >-
         A login that connects one or more platforms: `meta` (Facebook Pages + Instagram), `threads`, `tiktok`,
-        `linkedin`, `google` (YouTube), `x`, `bluesky`.
-      enum: [meta, threads, tiktok, linkedin, google, x, bluesky]
+        `linkedin`, `google` (YouTube), `x`, `bluesky`. `demo` (only in demo mode, `DEMO_MODE=on`): simulated
+        accounts that publish nothing; label accounts with this connector as demo accounts in your UI.
+      enum: [meta, threads, tiktok, linkedin, google, x, bluesky, demo]
 
     TargetStatus:
       type: string
@@ -1481,7 +1487,9 @@ components:
       properties:
         id: { $ref: "#/components/schemas/PlatformId" }
         name: { type: string, examples: [Instagram] }
-        connector: { $ref: "#/components/schemas/ConnectorId" }
+        connector:
+          description: The platform's real connector (never `demo`; demo accounts exist for every platform).
+          allOf: [{ $ref: "#/components/schemas/ConnectorId" }]
         capabilities: { $ref: "#/components/schemas/Capabilities" }
         options:
           type: array
@@ -1517,7 +1525,7 @@ components:
 
     Description:
       type: object
-      required: [publicUrl, publicMediaReachable, ffmpeg, maxUploadMb, supportedMimeTypes, platforms, connectors]
+      required: [publicUrl, publicMediaReachable, ffmpeg, demo, maxUploadMb, supportedMimeTypes, platforms, connectors]
       properties:
         publicUrl:
           type: string
@@ -1529,6 +1537,11 @@ components:
         ffmpeg:
           type: boolean
           description: Whether ffmpeg/ffprobe are installed on the server.
+        demo:
+          type: boolean
+          description: >-
+            Demo mode is on: the `demo` connector is listed, and demo accounts publish (simulated, no platform is
+            called).
         maxUploadMb: { type: integer }
         supportedMimeTypes:
           type: array
