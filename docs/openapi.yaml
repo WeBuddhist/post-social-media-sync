@@ -897,7 +897,7 @@ paths:
       summary: Log in to the dashboard (DASHBOARD=on only)
       description: >-
         Checks `ADMIN_PASSWORD` and sets the `pss_session` cookie (HttpOnly, SameSite=Lax, 30 days). The session acts
-        as the owner `default`. After 5 wrong passwords from one IP, logins from it are refused for 15 minutes. The IP
+        for one of the dashboard's brands (see `X-Brand-Id`). After 5 wrong passwords from one IP, logins from it are refused for 15 minutes. The IP
         is the connection's address; `X-Forwarded-For` is only believed from the proxies named in `TRUST_PROXY` (off by
         default).
       security: []
@@ -1014,6 +1014,118 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /brands:
+    get:
+      tags: [Dashboard server]
+      operationId: dashboardListBrands
+      summary: The dashboard's brands (DASHBOARD=on only)
+      description: >-
+        Each brand is an owner with its own accounts, media and posts; dashboard requests pick one with `X-Brand-Id`.
+        Kept in `DATA_DIR/brands.json`, which is created on first run with the brand `default` ("My brand").
+        Oldest first. Doesn't depend on `X-Brand-Id`.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [brands]
+                properties:
+                  brands:
+                    type: array
+                    items: { $ref: "#/components/schemas/Brand" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Dashboard server]
+      operationId: dashboardCreateBrand
+      summary: Add a brand (DASHBOARD=on only)
+      description: The id is derived from the name (letters, digits, `-`), made unique, and never changes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BrandName" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [brand]
+                properties:
+                  brand: { $ref: "#/components/schemas/Brand" }
+        "400":
+          description: The name is missing, longer than 60 characters or has control characters.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "409":
+          description: Another brand has this name (ignoring case).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /brands/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Brand id.
+        schema: { type: string }
+    patch:
+      tags: [Dashboard server]
+      operationId: dashboardRenameBrand
+      summary: Rename a brand (DASHBOARD=on only)
+      description: Only the name changes; the id (the owner of the brand's data) stays.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BrandName" }
+      responses:
+        "200":
+          description: Renamed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [brand]
+                properties:
+                  brand: { $ref: "#/components/schemas/Brand" }
+        "400":
+          description: Invalid name.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Another brand has this name (ignoring case).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    delete:
+      tags: [Dashboard server]
+      operationId: dashboardDeleteBrand
+      summary: Delete a brand (DASHBOARD=on only)
+      description: Only a brand without connected accounts and without posts, and never the last brand.
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The brand still has accounts or posts, or it is the only brand.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { error: Acme still has 3 connected accounts. Disconnect its accounts and delete its posts first. }
 
   /healthz:
     servers:
@@ -1213,8 +1325,11 @@ components:
       in: cookie
       name: pss_session
       description: >-
-        Ready-made server with DASHBOARD=on: the session cookie set by `POST /login`. Acts as the owner `default`.
-        When you embed the package, use your own session instead.
+        Ready-made server with DASHBOARD=on: the session cookie set by `POST /login`. Acts for the brand named by the
+        `X-Brand-Id` header (or a `brand` query parameter on GET requests, e.g. `GET /connect/{connector}?brand=acme`),
+        else the first brand (`GET /brands`); each brand is an owner. An unknown brand answers 400. OAuth callbacks
+        save the accounts for the brand that started the login. When you embed the package, use your own session
+        instead.
 
   parameters:
     OwnerId:
@@ -1223,8 +1338,9 @@ components:
       required: false
       description: >-
         Ready-made server with bearer auth only: the owner (your user or workspace id) to act for. Default `default`.
-        A value not matching the pattern answers 400. Ignored for cookie sessions. Not part of the package: embedders
-        identify the owner in their `authenticate` hook.
+        A value not matching the pattern answers 400. Ignored for cookie sessions (they use `X-Brand-Id`); a dashboard
+        brand's id acts for that brand. Not part of the package: embedders identify the owner in their `authenticate`
+        hook.
       schema:
         type: string
         pattern: "^[A-Za-z0-9._:@|-]{1,200}$"
@@ -1382,6 +1498,21 @@ components:
           type: array
           description: Per-account problems (creating a post).
           items: { $ref: "#/components/schemas/TargetIssue" }
+
+    Brand:
+      type: object
+      description: A dashboard brand (ready-made server only). Its id is the owner id of its accounts, media and posts.
+      required: [id, name, createdAt]
+      properties:
+        id: { type: string, pattern: "^[A-Za-z0-9_-]{1,64}$", examples: [acme-coffee] }
+        name: { type: string, maxLength: 60, examples: [Acme Coffee] }
+        createdAt: { type: integer, description: Epoch milliseconds. }
+
+    BrandName:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60, description: Trimmed; unique ignoring case. }
 
     Ok:
       type: object

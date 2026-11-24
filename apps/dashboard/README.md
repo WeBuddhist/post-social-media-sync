@@ -47,6 +47,26 @@ Settings worth knowing about besides the platform keys:
 restarts. A logout request without a valid session only clears that browser's cookie. Servers that don't share
 `DATA_DIR` don't see each other's logouts. `API_TOKEN` access isn't affected.
 
+## Several brands
+
+The dashboard can hold several brands, each with its own connected accounts, uploads and posts (each brand is a
+separate owner in the engine). Pick the brand in the header before composing; **Manage brands** adds, renames and
+deletes them. The choice is remembered per browser (localStorage).
+
+- Brands live in `DATA_DIR/brands.json` (`[{ "id", "name", "createdAt" }]`, written atomically). On first run it is
+  created with one brand, `default` ("My brand"), so everything connected before (owner `default`) stays visible.
+  Ids are derived from the name (`Acme Coffee` → `acme-coffee`) and never change; names are unique (ignoring case).
+- A brand can be deleted only when it has no connected accounts and no posts (409 otherwise); the last brand can't be
+  deleted.
+- Dashboard requests name their brand with the `X-Brand-Id` header, or `?brand=<id>` on GET links such as
+  `/api/connect/<connector>?brand=<id>`; without either they act for the first brand, and an unknown brand gets 400.
+  The connect link's `returnTo` (`/?brand=<id>#accounts`) brings the browser back to the same brand.
+- `API_TOKEN` callers are unchanged: they pick the owner with `X-Owner-Id` (a brand's id acts for that brand) and
+  ignore `X-Brand-Id`.
+- Routes (session cookie or `API_TOKEN`): `GET /api/brands`, `POST /api/brands { name }`,
+  `PATCH /api/brands/<id> { name }`, `DELETE /api/brands/<id>`. See [docs/openapi.yaml](../../docs/openapi.yaml).
+- Servers sharing `DATA_DIR` share the brands.
+
 ## Headless mode
 
 `DASHBOARD=off` turns off the web UI and the password login: the server is only the HTTP API, for backends in any
@@ -54,7 +74,7 @@ language. It then needs `API_TOKEN` (16+ characters). Your backend sends:
 
 - `Authorization: Bearer <API_TOKEN>`
 - `X-Owner-Id: <your user or workspace id>`, so each of your users has their own accounts, media and posts
-  (without it, requests act for the owner `default`, the one the dashboard uses)
+  (without it, requests act for the owner `default`, the dashboard's first brand)
 
 Useful with it: `ALLOWED_RETURN_ORIGINS` (where browsers may return after connecting an account), `CORS_ORIGINS`
 (frontends calling the API directly), `REMOTE_MEDIA_HOSTS` (hosts `POST /api/media/from-url` may download from),

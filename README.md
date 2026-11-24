@@ -126,6 +126,17 @@ fail once and be retried a minute later. It's also a convenient backend while yo
 off (the default) for real use; demo accounts then stop working and can be disconnected. In the package, the same is
 the [`demo` option](docs/PLUGIN.md#demo-mode).
 
+### Several brands
+
+Run several brands (each with its own Facebook, Instagram, YouTube, TikTok, X, ... accounts) from one dashboard:
+**Manage brands** in the header adds, renames and deletes them, and the brand selector next to it says which brand
+you are working on. Each brand is its own owner, so its connected accounts, uploads, posts and history are fully
+separate: choose the brand first, then compose, and a post can only go to that brand's accounts. The selected brand
+is remembered per browser, and connecting an account brings you back to the brand that started it. Brands are kept
+in `DATA_DIR/brands.json`; the first one (`default`, "My brand" until you rename it) holds everything connected
+before. A brand can be deleted once it has no accounts and no posts. A backend using `API_TOKEN` acts for a brand
+with `X-Owner-Id: <brand id>`.
+
 ### With Docker
 
 ```bash
@@ -166,7 +177,7 @@ your backend calls it with:
 
 - `Authorization: Bearer <API_TOKEN>`, and
 - `X-Owner-Id: <your user or workspace id>` to act for one of your users. Each owner only sees their own accounts,
-  media and posts. Without the header, requests act for the dashboard's owner (`default`).
+  media and posts. Without the header, requests act for the owner `default` (the dashboard's first brand).
 
 ```bash
 TOKEN=your-api-token

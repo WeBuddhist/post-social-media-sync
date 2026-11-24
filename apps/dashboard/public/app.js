@@ -67,6 +67,8 @@ const SETUP_NOTES = {
 
 const state = {
   meta: null,
+  brands: [],
+  brandId: null, // the brand (owner) every request acts for: sent as X-Brand-Id
   accounts: [],
   media: [], // uploaded items, or { tempId, uploading: true, name, progress }
   selected: new Set(loadJSON("selected", [])),
@@ -98,9 +100,11 @@ function saveJSON(key, value) {
 // ---- API -------------------------------------------------------------------------
 
 async function api(path, { method = "GET", body } = {}) {
+  const headers = body !== undefined ? { "Content-Type": "application/json" } : {};
+  if (state.brandId) headers["X-Brand-Id"] = state.brandId;
   const res = await fetch(`/api${path}`, {
     method,
-    headers: body !== undefined ? { "Content-Type": "application/json" } : {},
+    headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
     credentials: "same-origin",
   });
@@ -128,8 +132,11 @@ function toast(message, kind = "") {
   setTimeout(() => el.remove(), kind === "bad" ? 9000 : 4500);
 }
 
-/** Starts an OAuth login; the server sends the browser back to the Accounts tab afterwards. */
-const connectUrl = (connector) => `/api/connect/${encodeURIComponent(connector)}?returnTo=${encodeURIComponent("/#accounts")}`;
+/** Starts an OAuth login for the current brand; the server sends the browser back to that brand's Accounts tab. */
+const connectUrl = (connector) => {
+  const brand = encodeURIComponent(state.brandId);
+  return `/api/connect/${encodeURIComponent(connector)}?brand=${brand}&returnTo=${encodeURIComponent(`/?brand=${brand}#accounts`)}`;
+};
 
 const platformName = (id) => state.meta?.platforms.find((p) => p.id === id)?.name ?? id;
 const platformInfo = (id) => state.meta?.platforms.find((p) => p.id === id);
@@ -220,7 +227,7 @@ function route() {
   if (outcome === "connected") toastConnected(Number(result.get("count") ?? 1), result.get("connector"));
   if (outcome === "confirm") confirmLogin(result.get("confirm") ?? "", result.get("connector"));
   if (outcome === "error") toast(result.get("error") ?? "Connecting failed.", "bad");
-  if (outcome || query) history.replaceState(null, "", `${location.pathname}#${name}`);
+  if (outcome || query || result.has("brand")) history.replaceState(null, "", `${location.pathname}#${name}`);
 
   clearTimeout(state.pollTimer);
   if (name === "history") loadPosts();
@@ -247,6 +254,8 @@ async function confirmLogin(token, connector) {
 }
 
 async function boot() {
+  // After an OAuth login, ?brand= names the brand that started it.
+  await loadBrands(new URLSearchParams(location.search).get("brand"));
   const [meta, { accounts }] = await Promise.all([api("/meta"), api("/accounts")]);
   state.meta = meta;
   state.options = forgetOneOffOptions(state.options);
@@ -259,8 +268,136 @@ async function boot() {
 }
 
 async function refreshAccounts() {
-  state.accounts = (await api("/accounts")).accounts;
+  const brand = state.brandId;
+  const { accounts } = await api("/accounts");
+  if (brand === state.brandId) state.accounts = accounts; // else the brand changed meanwhile
 }
+
+// ---- brands ------------------------------------------------------------------------
+
+const currentBrand = () => state.brands.find((b) => b.id === state.brandId);
+const brandName = () => currentBrand()?.name ?? "this brand";
+const knownBrand = (id) => state.brands.some((b) => b.id === id);
+
+/** Loads the brands and picks one: `preferred` if it exists, else the current or remembered one, else the first. */
+async function loadBrands(preferred) {
+  state.brands = (await api("/brands")).brands;
+  state.brandId = [preferred, state.brandId, loadJSON("brand", null)].find(knownBrand) ?? state.brands[0].id;
+  saveJSON("brand", state.brandId);
+  renderBrand();
+}
+
+function renderBrand() {
+  const select = $("#brand-select");
+  select.replaceChildren(...state.brands.map((b) => h("option", { value: b.id }, b.name)));
+  select.value = state.brandId;
+  for (const el of $$("[data-brand-name]")) el.textContent = brandName();
+  document.title = `${brandName()} · Post Sync`;
+}
+
+/** Everything on screen belongs to one brand: switching starts the composer's accounts and media over. */
+async function switchBrand(id) {
+  if (id === state.brandId || !knownBrand(id)) return renderBrand();
+  state.brandId = id;
+  saveJSON("brand", id);
+  state.selected = new Set();
+  saveJSON("selected", []);
+  state.media = [];
+  state.issues = [];
+  state.serverLengths = null;
+  state.accounts = [];
+  state.posts = [];
+  state.nextBefore = null;
+  renderBrand();
+  renderIssues();
+  try {
+    await refreshAccounts();
+  } catch (err) {
+    toast(err.message, "bad");
+  }
+  route();
+}
+
+$("#brand-select").addEventListener("change", (e) => switchBrand(e.target.value));
+
+const brandsDialog = $("#brands-dialog");
+$("#manage-brands").addEventListener("click", () => {
+  brandsError(null);
+  renderBrandRows();
+  brandsDialog.showModal();
+});
+$("#brands-close").addEventListener("click", () => brandsDialog.close());
+
+function brandsError(message) {
+  $("#brands-error").textContent = message ?? "";
+  $("#brands-error").hidden = !message;
+}
+
+function renderBrandRows() {
+  const rows = $("#brand-rows");
+  rows.replaceChildren();
+  const only = state.brands.length === 1;
+  for (const b of state.brands) {
+    const input = h("input", { type: "text", value: b.name, maxlength: 60, required: true, "aria-label": `Name of ${b.name}` });
+    const form = h(
+      "form",
+      { class: "brand-row" },
+      input,
+      b.id === state.brandId ? h("span", { class: "tag tag-ok" }, "Current") : null,
+      h("button", { class: "btn btn-sm", type: "submit" }, "Rename"),
+      h(
+        "button",
+        {
+          class: "btn btn-ghost btn-sm btn-danger",
+          type: "button",
+          disabled: only,
+          title: only ? "The only brand can't be deleted" : "Only a brand without accounts and posts can be deleted",
+          onclick: async () => {
+            if (!confirm(`Delete the brand ${b.name}?`)) return;
+            await brandAction(async () => {
+              await api(`/brands/${encodeURIComponent(b.id)}`, { method: "DELETE" });
+            });
+          },
+        },
+        "Delete",
+      ),
+    );
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (input.value.trim() === b.name) return;
+      await brandAction(async () => {
+        await api(`/brands/${encodeURIComponent(b.id)}`, { method: "PATCH", body: { name: input.value } });
+      });
+    });
+    rows.append(form);
+  }
+}
+
+/** Runs a change to the brands, reloads them and switches to the brand `run` returns (or away from a deleted one). */
+async function brandAction(run) {
+  brandsError(null);
+  let switchTo;
+  try {
+    switchTo = await run();
+    state.brands = (await api("/brands")).brands;
+  } catch (err) {
+    brandsError(err.message);
+    return false;
+  }
+  const target = [switchTo, state.brandId].find(knownBrand) ?? state.brands[0].id;
+  if (target === state.brandId) renderBrand();
+  else await switchBrand(target);
+  renderBrandRows();
+  return true;
+}
+
+$("#brand-add").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const name = new FormData(form).get("name");
+  const added = await brandAction(async () => (await api("/brands", { method: "POST", body: { name } })).brand.id);
+  if (added) form.reset();
+});
 
 // ---- compose -----------------------------------------------------------------------
 
@@ -300,7 +437,7 @@ function renderPicker() {
   const box = $("#account-picker");
   box.replaceChildren();
   if (state.accounts.length === 0) {
-    box.append(h("div", { class: "empty" }, "No accounts connected yet. ", h("a", { href: "#accounts" }, "Connect your first account →")));
+    box.append(h("div", { class: "empty" }, `No accounts for ${brandName()} yet. Connect them on `, h("a", { href: "#accounts" }, "Accounts"), "."));
     $("#select-all").hidden = true;
     return;
   }
@@ -493,8 +630,10 @@ async function validate() {
     return;
   }
   const key = lengthKey();
+  const brand = state.brandId;
   try {
     const { issues } = await api("/posts/validate", { method: "POST", body: req });
+    if (brand !== state.brandId) return;
     state.issues = issues.filter((i) => i.errors.length);
     // The server counts exactly like each platform (X's rules are complex); prefer its numbers while still current.
     state.serverLengths = { key, byPlatform: Object.fromEntries(issues.map((i) => [i.platform, i.length])) };
@@ -613,6 +752,7 @@ function upload(file) {
 
   const xhr = new XMLHttpRequest();
   xhr.open("POST", "/api/media");
+  xhr.setRequestHeader("X-Brand-Id", state.brandId);
   xhr.upload.addEventListener("progress", (e) => {
     if (!e.lengthComputable) return;
     temp.progress = e.loaded / e.total;
@@ -726,7 +866,9 @@ async function loadPosts(append = false) {
   clearTimeout(state.pollTimer);
   try {
     const before = append && state.nextBefore ? `&before=${encodeURIComponent(state.nextBefore)}` : "";
+    const brand = state.brandId;
     const { posts, nextBefore } = await api(`/posts?limit=20${before}`);
+    if (brand !== state.brandId) return;
     state.posts = append ? [...state.posts, ...posts] : posts;
     state.nextBefore = nextBefore;
     renderPosts();
@@ -749,7 +891,9 @@ function schedulePoll() {
 
 async function refreshVisiblePosts() {
   try {
+    const brand = state.brandId;
     const { posts } = await api(`/posts?limit=${Math.max(20, state.posts.length)}`);
+    if (brand !== state.brandId) return;
     state.posts = posts;
     renderPosts();
   } catch {
@@ -764,7 +908,7 @@ function renderPosts() {
   const list = $("#post-list");
   list.replaceChildren();
   if (state.posts.length === 0) {
-    list.append(h("div", { class: "card empty" }, "Nothing posted yet. ", h("a", { href: "#compose" }, "Write your first post →")));
+    list.append(h("div", { class: "card empty" }, `Nothing posted for ${brandName()} yet. `, h("a", { href: "#compose" }, "Write the first post →")));
   }
   for (const p of state.posts) list.append(postCard(p));
   $("#load-more").hidden = !state.nextBefore;
@@ -870,7 +1014,7 @@ async function renderAccounts() {
   await refreshAccounts().catch((err) => toast(err.message, "bad"));
   const list = $("#account-list");
   list.replaceChildren();
-  if (!state.accounts.length) list.append(h("div", { class: "empty" }, "No accounts yet. Connect one below."));
+  if (!state.accounts.length) list.append(h("div", { class: "empty" }, `No accounts for ${brandName()} yet. Connect one below.`));
   for (const a of state.accounts) {
     const connector = state.meta.connectors.find((c) => c.id === a.connector);
     list.append(

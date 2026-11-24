@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { FastifyReply, FastifyRequest } from "fastify";
+import type { Brands } from "./brands.js";
 import type { DashboardConfig } from "./config.js";
 
 export const SESSION_COOKIE = "pss_session";
@@ -10,7 +11,7 @@ const SESSION_TTL_MS = 30 * 86400_000;
 const NOT_BEFORE_FILE = ".sessions-not-before";
 /** How long a replica trusts its copy of that file before re-reading it (another replica may have logged out). */
 const NOT_BEFORE_CACHE_MS = 5000;
-/** Owner id of everything created through the password-protected dashboard. */
+/** Owner id of Bearer requests without X-Owner-Id, and of the dashboard's first brand. */
 export const DASHBOARD_OWNER = "default";
 const OWNER_ID = /^[A-Za-z0-9._:@|-]{1,200}$/;
 
@@ -22,7 +23,8 @@ function safeEqual(a: string, b: string): boolean {
 
 /**
  * Who is calling:
- * - the dashboard (password → signed session cookie) acts as the single owner "default";
+ * - the dashboard (password → signed session cookie) acts for one of its brands (each brand is an owner), named by the
+ *   `X-Brand-Id` header or, on GET navigations, a `brand` query parameter; without either, the first brand;
  * - backends send `Authorization: Bearer <API_TOKEN>` and may act for any of their users with `X-Owner-Id`.
  */
 export class Auth {
@@ -30,7 +32,10 @@ export class Auth {
   private notBefore = { value: 0, readAt: -Infinity };
   private readonly notBeforeFile: string;
 
-  constructor(private readonly config: DashboardConfig) {
+  constructor(
+    private readonly config: DashboardConfig,
+    private readonly brands: Brands,
+  ) {
     this.notBeforeFile = path.join(config.dataDir, NOT_BEFORE_FILE);
   }
 
@@ -91,11 +96,26 @@ export class Auth {
     return Number(expires) - SESSION_TTL_MS > this.sessionsNotBefore();
   }
 
-  /** The owner this request acts for, or null if it isn't authenticated. Throws for a malformed X-Owner-Id. */
-  ownerId(req: FastifyRequest): string | null {
+  /** Whether the request carries a valid API token (null: it doesn't try; a wrong token doesn't fall back to the cookie). */
+  private bearer(req: FastifyRequest): boolean | null {
     const header = req.headers.authorization;
-    if (header?.startsWith("Bearer ")) {
-      if (!this.config.apiToken || !safeEqual(header.slice(7).trim(), this.config.apiToken)) return null;
+    if (!header?.startsWith("Bearer ")) return null;
+    return !!this.config.apiToken && safeEqual(header.slice(7).trim(), this.config.apiToken);
+  }
+
+  /** A valid API token or dashboard session, whichever owner or brand it acts for. */
+  authenticated(req: FastifyRequest): boolean {
+    return this.bearer(req) ?? this.hasSession(req);
+  }
+
+  /**
+   * The owner this request acts for, or null if it isn't authenticated. Throws (400) for a malformed X-Owner-Id or
+   * an unknown brand.
+   */
+  ownerId(req: FastifyRequest): string | null {
+    const bearer = this.bearer(req);
+    if (bearer !== null) {
+      if (!bearer) return null;
       const owner = req.headers["x-owner-id"];
       if (owner === undefined) return DASHBOARD_OWNER;
       if (typeof owner !== "string" || !OWNER_ID.test(owner)) {
@@ -103,7 +123,18 @@ export class Auth {
       }
       return owner;
     }
-    return this.hasSession(req) ? DASHBOARD_OWNER : null;
+    return this.hasSession(req) ? this.brandId(req) : null;
+  }
+
+  /** The brand a dashboard request acts for: X-Brand-Id, else `?brand=` on a GET (links), else the first brand. */
+  private brandId(req: FastifyRequest): string {
+    const query = req.method === "GET" || req.method === "HEAD" ? (req.query as Record<string, unknown> | undefined)?.brand : undefined;
+    const raw = req.headers["x-brand-id"] ?? query;
+    if (raw === undefined || raw === "") return this.brands.list()[0].id;
+    if (typeof raw !== "string" || !this.brands.get(raw)) {
+      throw Object.assign(new Error("Unknown brand. It may have been deleted: reload the page and choose a brand."), { statusCode: 400 });
+    }
+    return raw;
   }
 
   setCookie(reply: FastifyReply, value: string): void {

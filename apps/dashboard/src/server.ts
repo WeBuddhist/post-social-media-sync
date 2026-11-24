@@ -2,12 +2,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import cookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
-import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest, type FastifyServerOptions } from "fastify";
 import { createPostSync, type Logger, type PostSync, type Storage } from "post-social-media-sync";
 import { postSyncFastify } from "post-social-media-sync/fastify";
 import { postgresStorage } from "post-social-media-sync/postgres";
 import { sqliteStorage } from "post-social-media-sync/sqlite";
 import { Auth } from "./auth.js";
+import { Brands } from "./brands.js";
 import { CONNECTOR_ENV, type DashboardConfig } from "./config.js";
 import { forwardEvents } from "./webhooks.js";
 
@@ -39,6 +40,18 @@ function trustProxyOption(trust: DashboardConfig["trustProxy"]): FastifyServerOp
   return typeof trust === "number" ? (_address: string, hop: number) => hop < trust : trust;
 }
 
+/** The package's cookie that ties an OAuth login to the browser that started it (sent to /api/oauth/ only). */
+const OAUTH_BINDING_COOKIE = "postsync_oauth";
+
+function isOAuthCallback(req: FastifyRequest): boolean {
+  try {
+    const segments = new URL(req.url, "http://x").pathname.split("/").filter(Boolean).map(decodeURIComponent);
+    return segments.length === 4 && segments[0] === "api" && segments[1] === "oauth" && segments[3] === "callback";
+  } catch {
+    return false;
+  }
+}
+
 /** The ready-to-run server: the Post Sync API under /api, plus (unless DASHBOARD=off) the web dashboard. */
 export async function buildServer(opts: BuildOptions): Promise<FastifyInstance> {
   const { config } = opts;
@@ -68,7 +81,8 @@ export async function buildServer(opts: BuildOptions): Promise<FastifyInstance> 
   app.decorate("postSync", sync);
   if (config.webhook) forwardEvents(sync, { ...config.webhook, log: logger, sleep: opts.sleep });
 
-  const auth = new Auth(config);
+  const brands = new Brands(config.dataDir);
+  const auth = new Auth(config, brands);
   await app.register(cookie);
 
   // Security headers for every response, the API's included.
@@ -118,6 +132,44 @@ export async function buildServer(opts: BuildOptions): Promise<FastifyInstance> 
     });
 
     app.get("/api/session", async (req) => ({ authenticated: auth.hasSession(req) }));
+
+    // ---- brands: each one is an owner with its own accounts, media and posts -------------------------------
+    brands.list(); // creates brands.json with the first brand ("default") on first run
+
+    const trustedOrigins = new Set([new URL(config.siteUrl).origin, ...config.allowedReturnOrigins, ...config.corsOrigins]);
+    /** Login required; writes from a browser must come from a trusted origin (as for the API's own routes). */
+    const guard = async (req: FastifyRequest, reply: FastifyReply) => {
+      if (!auth.authenticated(req)) return reply.code(401).send({ error: "Not logged in." });
+      const origin = req.headers.origin;
+      const write = req.method !== "GET" && req.method !== "HEAD";
+      if (write && origin && !trustedOrigins.has(origin) && origin !== `${req.protocol}://${req.host}`) {
+        return reply.code(403).send({ error: "Cross-origin request blocked." });
+      }
+    };
+
+    app.get("/api/brands", { preHandler: guard }, async () => ({ brands: brands.list() }));
+
+    app.post<{ Body: { name?: unknown } }>("/api/brands", { preHandler: guard }, async (req, reply) =>
+      reply.code(201).send({ brand: brands.create(req.body?.name) }),
+    );
+
+    app.patch<{ Params: { id: string }; Body: { name?: unknown } }>("/api/brands/:id", { preHandler: guard }, async (req) => ({
+      brand: brands.rename(req.params.id, req.body?.name),
+    }));
+
+    app.delete<{ Params: { id: string } }>("/api/brands/:id", { preHandler: guard }, async (req, reply) => {
+      const brand = brands.get(req.params.id);
+      if (!brand) return reply.code(404).send({ error: "Brand not found." });
+      const [accounts, { posts }] = await Promise.all([sync.accounts.list(brand.id), sync.posts.list(brand.id, { limit: 1 })]);
+      if (accounts.length || posts.length) {
+        const what = [accounts.length ? `${accounts.length} connected account${accounts.length === 1 ? "" : "s"}` : "", posts.length ? "posts" : ""];
+        return reply.code(409).send({
+          error: `${brand.name} still has ${what.filter(Boolean).join(" and ")}. Disconnect its accounts and delete its posts first.`,
+        });
+      }
+      brands.remove(brand.id);
+      return { ok: true };
+    });
   }
 
   // Everything the dashboard's setup page needs: the engine's description plus which .env keys enable what.
@@ -135,7 +187,10 @@ export async function buildServer(opts: BuildOptions): Promise<FastifyInstance> 
   await app.register(postSyncFastify, {
     prefix: "/api",
     sync,
-    authenticate: (req) => auth.ownerId(req),
+    // An OAuth callback names no brand (the login's stored state does): when the browser that started the login comes
+    // back with its binding cookie, that cookie proves it, instead of the session's first brand refusing the others'.
+    authenticate: (req) =>
+      isOAuthCallback(req) && req.cookies?.[OAUTH_BINDING_COOKIE] && !req.headers.authorization ? null : auth.ownerId(req),
     allowedRedirectOrigins: [new URL(config.siteUrl).origin, ...config.allowedReturnOrigins],
     defaultReturnTo: `${config.siteUrl}/#accounts`,
     cors: config.corsOrigins.length ? { origins: config.corsOrigins, credentials: true } : undefined,

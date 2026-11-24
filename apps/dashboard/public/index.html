@@ -25,6 +25,11 @@
     <div id="app" hidden>
       <header class="topbar">
         <div class="brand"><span class="logo"></span>Post Sync</div>
+        <div class="brand-switch" title="Each brand has its own accounts, uploads and posts">
+          <label for="brand-select" class="muted">Brand</label>
+          <select id="brand-select"></select>
+          <button class="btn btn-ghost btn-sm" id="manage-brands" type="button">Manage brands</button>
+        </div>
         <nav class="tabs" id="tabs">
           <a href="#compose" data-view="compose">Compose</a>
           <a href="#history" data-view="history">Posts</a>
@@ -72,7 +77,7 @@
             <div class="col">
               <div class="card">
                 <div class="card-head">
-                  <h2>Post to</h2>
+                  <h2>Post to <span class="brand-tag" data-brand-name></span></h2>
                   <button class="btn btn-ghost btn-sm" id="select-all" type="button">Select all</button>
                 </div>
                 <div id="account-picker" class="account-picker"></div>
@@ -100,7 +105,7 @@
         <!-- History -->
         <section id="view-history" class="view" hidden>
           <div class="view-head">
-            <h1>Posts</h1>
+            <h1>Posts <span class="brand-tag" data-brand-name></span></h1>
           </div>
           <div id="post-list" class="post-list"></div>
           <button class="btn btn-ghost btn-block" id="load-more" type="button" hidden>Load older posts</button>
@@ -108,7 +113,7 @@
 
         <!-- Accounts -->
         <section id="view-accounts" class="view" hidden>
-          <div class="view-head"><h1>Accounts</h1></div>
+          <div class="view-head"><h1>Accounts <span class="brand-tag" data-brand-name></span></h1></div>
           <div class="card">
             <h2>Connected</h2>
             <div id="account-list" class="account-list"></div>
@@ -127,6 +132,20 @@
         </section>
       </main>
     </div>
+
+    <dialog id="brands-dialog" class="dialog" aria-labelledby="brands-title">
+      <div class="card-head">
+        <h2 id="brands-title">Brands</h2>
+        <button class="btn btn-ghost btn-sm" id="brands-close" type="button">Close</button>
+      </div>
+      <p class="muted">Each brand has its own connected accounts, uploads and posts. Choose the brand before you compose.</p>
+      <div id="brand-rows" class="brand-rows"></div>
+      <p id="brands-error" class="error-text" hidden></p>
+      <form id="brand-add" class="brand-add">
+        <input name="name" type="text" maxlength="60" placeholder="New brand name" aria-label="New brand name" required autocomplete="off" />
+        <button class="btn btn-primary" type="submit">Add brand</button>
+      </form>
+    </dialog>
 
     <div id="toasts" class="toasts" aria-live="polite"></div>
     <script src="/app.js" type="module"></script>
