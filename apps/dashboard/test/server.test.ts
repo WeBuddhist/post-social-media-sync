@@ -585,13 +585,20 @@ describe("connecting accounts", () => {
     expect((await api(app, "GET", "/accounts", { cookie: session })).json().accounts).toEqual([expect.objectContaining({ platform: "facebook" })]);
   });
 
-  it("refuses a login URL another owner started when it comes back to a logged-in dashboard", async () => {
+  it("never saves a login URL another owner started, even when it comes back to a logged-in dashboard", async () => {
     const app = await start({ platforms: META_KEYS });
     const started = await api(app, "POST", "/connect/meta", bearer("mallory"), {});
     const state = new URL(started.json().url).searchParams.get("state");
     const { fn } = mockFetch([]);
-    const callback = await app.inject({ url: `/api/oauth/meta/callback?code=CODE&state=${state}`, headers: { cookie: await login(app) } });
-    expect(new URL(String(callback.headers.location)).searchParams.get("error")).toMatch(/started by a different user/);
+    const cookie = await login(app);
+    const callback = await app.inject({ url: `/api/oauth/meta/callback?code=CODE&state=${state}`, headers: { cookie } });
+    // No binding cookie from this browser: the code isn't exchanged, the login waits for its owner to confirm it...
+    const back = new URL(String(callback.headers.location));
+    expect(back.searchParams.get("postsync")).toBe("confirm");
+    expect(fn).not.toHaveBeenCalled();
+    // ...and the dashboard (another owner) confirming it is refused, which also uses the token up.
+    const confirm = await api(app, "POST", "/connect/confirm", { cookie }, { confirm: back.searchParams.get("confirm") });
+    expect(confirm.statusCode).toBe(403);
     expect(fn).not.toHaveBeenCalled();
     expect((await api(app, "GET", "/accounts", bearer("mallory"))).json().accounts).toEqual([]);
   });

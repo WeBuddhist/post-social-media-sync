@@ -187,10 +187,10 @@ export async function buildServer(opts: BuildOptions): Promise<FastifyInstance> 
   await app.register(postSyncFastify, {
     prefix: "/api",
     sync,
-    // An OAuth callback names no brand (the login's stored state does): when the browser that started the login comes
-    // back with its binding cookie, that cookie proves it, instead of the session's first brand refusing the others'.
-    authenticate: (req) =>
-      isOAuthCallback(req) && req.cookies?.[OAUTH_BINDING_COOKIE] && !req.headers.authorization ? null : auth.ownerId(req),
+    // An OAuth callback names no brand (the login's stored state does), and every brand belongs to the same dashboard
+    // login, so a cookie session says nothing about which brand it is for. The binding cookie proves the browser; without
+    // it the login waits for confirmation, which the page that started it sends for its own brand.
+    authenticate: (req) => (isOAuthCallback(req) && !req.headers.authorization ? null : auth.ownerId(req)),
     allowedRedirectOrigins: [new URL(config.siteUrl).origin, ...config.allowedReturnOrigins],
     defaultReturnTo: `${config.siteUrl}/#accounts`,
     cors: config.corsOrigins.length ? { origins: config.corsOrigins, credentials: true } : undefined,
