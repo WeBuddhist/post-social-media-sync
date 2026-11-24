@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
-import type { ConnectorId, PlatformKeys, PostSyncEventName } from "post-social-media-sync";
+import { PLATFORMS, type ConnectorId, type PlatformId, type PlatformKeys, type PostSyncEventName } from "post-social-media-sync";
 import { EVENT_NAMES } from "./webhooks.js";
 
 export interface DashboardConfig {
@@ -31,6 +31,8 @@ export interface DashboardConfig {
   maxAttempts: number;
   /** DEMO_MODE: offer simulated demo accounts that publish nothing (for trying the server without app keys). */
   demo: boolean;
+  /** ENABLED_PLATFORMS: only offer these platforms (null = all). */
+  enabledPlatforms: PlatformId[] | null;
   platforms: PlatformKeys;
   webhook: { url: string; secret: string | null; events: PostSyncEventName[] | null } | null;
   /** Origins (besides siteUrl) that `returnTo` may send browsers back to after connecting an account. */
@@ -148,6 +150,15 @@ function resolveSecret(dataDir: string): string {
   return secret;
 }
 
+function enabledPlatforms(): PlatformId[] | null {
+  const names = envList("ENABLED_PLATFORMS").map((n) => n.toLowerCase());
+  if (!names.length) return null;
+  const valid = Object.keys(PLATFORMS);
+  const unknown = names.filter((n) => !valid.includes(n));
+  if (unknown.length) throw new Error(`ENABLED_PLATFORMS has unknown platform(s) ${unknown.join(", ")}. Valid: ${valid.join(", ")}`);
+  return [...new Set(names)] as PlatformId[];
+}
+
 export function loadConfig(): DashboardConfig {
   const port = envInt("PORT", 3000);
   const siteUrl = env("PUBLIC_BASE_URL", `http://localhost:${port}`).replace(/\/+$/, "");
@@ -207,6 +218,7 @@ export function loadConfig(): DashboardConfig {
     workerConcurrency: Math.max(1, envInt("WORKER_CONCURRENCY", 3)),
     maxAttempts: Math.max(1, envInt("MAX_ATTEMPTS", 3)),
     demo: envBool("DEMO_MODE", false),
+    enabledPlatforms: enabledPlatforms(),
     webhook: webhookUrl ? { url: webhookUrl, secret: env("WEBHOOK_SECRET") || null, events: webhookEvents.length ? webhookEvents : null } : null,
     allowedReturnOrigins: origins("ALLOWED_RETURN_ORIGINS"),
     corsOrigins: origins("CORS_ORIGINS"),

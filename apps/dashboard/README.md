@@ -40,6 +40,7 @@ Settings worth knowing about besides the platform keys:
   can try composing, publishing, history, retries and webhooks without real accounts or app keys. Nothing is posted;
   captions with `#fail` or `#flaky` simulate a failure or a retried temporary error. Off by default; with it off, demo
   accounts are refused when posting. See [Demo mode](../../docs/PLUGIN.md#demo-mode).
+- `ENABLED_PLATFORMS`: only offer these platforms, e.g. `facebook,instagram,youtube,tiktok,x` (default: all eight).
 
 **Logging out ends every dashboard session**: all browsers and devices, and other servers sharing the same
 `DATA_DIR` within about 5 seconds. The cut-off time is kept in `DATA_DIR/.sessions-not-before`, so it survives

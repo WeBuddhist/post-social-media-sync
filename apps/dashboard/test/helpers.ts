@@ -39,6 +39,7 @@ export function dashboardConfig(overrides: Partial<DashboardConfig> = {}): Dashb
     workerConcurrency: 2,
     maxAttempts: 3,
     demo: false,
+    enabledPlatforms: null,
     platforms: {},
     webhook: null,
     allowedReturnOrigins: [],

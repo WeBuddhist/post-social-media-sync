@@ -30,6 +30,7 @@ const VARS = [
   "REMOTE_MEDIA_HOSTS",
   "BLUESKY_SERVERS",
   "DEMO_MODE",
+  "ENABLED_PLATFORMS",
   "META_APP_ID",
   "META_APP_SECRET",
   "META_GRAPH_VERSION",
@@ -160,6 +161,22 @@ describe("loadConfig", () => {
       google: { clientId: "g-id", clientSecret: "g-secret" },
       x: { clientId: "x-id", clientSecret: "x-secret" },
     });
+  });
+
+  it("limits the platforms with ENABLED_PLATFORMS", async () => {
+    expect(loadConfig().enabledPlatforms).toBeNull();
+    env({ ENABLED_PLATFORMS: "Facebook, instagram,youtube,tiktok,x" });
+    const config = loadConfig();
+    expect(config.enabledPlatforms).toEqual(["facebook", "instagram", "youtube", "tiktok", "x"]);
+    const app = await buildServer({ config, storage: sqliteStorage(":memory:"), startWorker: false });
+    try {
+      const ids = (await app.postSync.describe()).platforms.map((p) => p.id).sort();
+      expect(ids).toEqual(["facebook", "instagram", "tiktok", "x", "youtube"]);
+    } finally {
+      await app.close();
+    }
+    env({ ENABLED_PLATFORMS: "facebook,myspace" });
+    expect(() => loadConfig()).toThrow(/myspace/);
   });
 
   it("names the env vars of every connector", () => {

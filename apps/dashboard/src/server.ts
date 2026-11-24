@@ -60,6 +60,7 @@ export async function buildServer(opts: BuildOptions): Promise<FastifyInstance> 
     maxUploadMb: config.maxUploadMb,
     platforms: config.platforms,
     demo: config.demo,
+    enabledPlatforms: config.enabledPlatforms ?? undefined,
     worker: { autoStart: false, concurrency: config.workerConcurrency, maxAttempts: config.maxAttempts },
     logger,
     sleep: opts.sleep,
