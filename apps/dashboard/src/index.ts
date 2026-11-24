@@ -23,9 +23,17 @@ async function main() {
   }
   if (!description.ffmpeg) app.log.warn("ffmpeg/ffprobe not found: video checks and automatic image conversion are disabled.");
 
+  // First Ctrl+C: start nothing new and wait for posts that are publishing (a video can take minutes). Second: stop now.
+  let stopping = false;
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
-    process.once(signal, async () => {
-      app.log.info(`${signal} received, finishing running uploads (up to 10s)…`);
+    process.on(signal, async () => {
+      if (stopping) {
+        app.log.warn("Stopping now. Posts that were still publishing are reported as interrupted next time.");
+        process.exit(1);
+      }
+      stopping = true;
+      app.log.info(`${signal} received: waiting for posts that are publishing to finish (press Ctrl+C again to stop now)…`);
+      await app.postSync.worker.stop(6 * 3600_000);
       await app.close();
       process.exit(0);
     });

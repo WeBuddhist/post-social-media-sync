@@ -161,7 +161,9 @@ Platforms send the browser back to `PUBLIC_BASE_URL` after a login, most of them
   and set `PUBLIC_BASE_URL=https://posts.example.com` and `TRUST_PROXY=uniquelocal` (the container receives
   Caddy's requests from Docker's private network; use `TRUST_PROXY=loopback` if you run the server without
   Docker).
-- **From your own computer**: `cloudflared tunnel --url http://localhost:3000` (or `ngrok http 3000`) and set
+- **From your own computer, only when you post**: `npm run local` starts the server and a Cloudflare Tunnel on your
+  own domain together, and Ctrl+C waits for posts to finish. Step by step: **[docs/LOCAL.md](docs/LOCAL.md)**.
+- **Quick try from your own computer**: `cloudflared tunnel --url http://localhost:3000` (or `ngrok http 3000`) and set
   `PUBLIC_BASE_URL` to the HTTPS address it prints, and `TRUST_PROXY=loopback` (`uniquelocal` if the server runs
   in Docker). `docker compose --profile tunnel up` runs the Cloudflare tunnel for you (with
   `TRUST_PROXY=uniquelocal`).

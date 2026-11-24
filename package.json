@@ -17,7 +17,8 @@
     "typecheck": "npm run typecheck -w post-social-media-sync && npm run typecheck -w @post-sync/dashboard",
     "test": "vitest run",
     "dev": "npm run dev -w @post-sync/dashboard",
-    "start": "npm run start -w @post-sync/dashboard"
+    "start": "npm run start -w @post-sync/dashboard",
+    "local": "node scripts/local.mjs"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
